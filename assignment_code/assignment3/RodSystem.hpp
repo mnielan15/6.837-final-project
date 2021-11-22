@@ -77,12 +77,13 @@ virtual ParticleState ComputeTimeDerivative(const ParticleState& state,
             }
             new_particle_velocities.push_back(acceleration);
 
+            // TODO: we should do this constraint in the integrator instead maybe?
             // Inextensibility property (i.e. rods always stay the same length)
             // glm::vec3 prev_old_pos = particle_positions[i-1];
             // glm::vec3 this_old_pos = particle_positions[i];
-            float old_length = glm::length(prev_vec);
-
-            new_particle_positions.push_back(glm::normalize(particle_velocities[i]) * old_length);
+            // float old_length = glm::length(prev_vec);
+            // new_particle_positions.push_back(glm::normalize(particle_velocities[i]) * old_length);
+            new_particle_positions.push_back(particle_velocities[i]);
         }
     }
     return ParticleState{new_particle_positions, new_particle_velocities}; 
