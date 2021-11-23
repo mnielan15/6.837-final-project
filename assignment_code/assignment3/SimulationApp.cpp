@@ -62,14 +62,23 @@ void SimulationApp::SetupScene() {
   //state
   //systemstate
 
-  auto spiral_node = make_unique<Lab3SceneNode>(integration_step_, integrator_type_);
-  root.AddChild(std::move(spiral_node));
+  //auto spiral_node = make_unique<Lab3SceneNode>(integration_step_, integrator_type_);
+  //root.AddChild(std::move(spiral_node));
 
   auto pendulum_node = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
+  pendulum_node->shift();
   root.AddChild(std::move(pendulum_node));
 
-  auto cloth_node = make_unique<Lab3Part3SceneNode>(integration_step_, integrator_type_);
-  root.AddChild(std::move(cloth_node));
+  auto pendulum_node2 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
+  root.AddChild(std::move(pendulum_node2));
+
+  auto pendulum_node3 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
+  root.AddChild(std::move(pendulum_node3));
+
+
+
+  //auto cloth_node = make_unique<Lab3Part3SceneNode>(integration_step_, integrator_type_);
+  //root.AddChild(std::move(cloth_node));
 
 
 }
