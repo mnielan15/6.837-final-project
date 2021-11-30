@@ -50,7 +50,7 @@ void FixParticle(std::vector<bool> fix){
                 //std::cout << i << glm::to_string(state.positions[i]) << std::endl;
                 
                 new_particle_velocities.push_back(glm::vec3(0.f));
-                new_particle_positions.push_back(glm::vec3(0.f));
+                new_particle_positions.push_back(state.positions[i]);
             }
             else{
                 glm::vec3 gravity = glm::vec3(0.f,-1.f, 0.f) * masses_[i]*9.81f;
