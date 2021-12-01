@@ -90,10 +90,11 @@ std::vector<glm::vec3> GetExternalForces(const ParticleState& state) {
     return external_forces; 
 }
 float s_damp_ = 0.9;
+std::vector<float> radii_;
+
 private:
 float drag_ = 0.8;
 std::vector<float> masses_;
-std::vector<float> radii_;
 std::vector<bool> fixed_particles_;
 
 

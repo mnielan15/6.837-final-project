@@ -48,6 +48,7 @@ class HairNode : public SceneNode {
     for (int i = 0; i < num_joints_; i++){
         velocities.push_back(glm::vec3(0.0f));
         masses.push_back(1.0f);
+        radii.push_back(length / num_joints_);
         if (i == 0) {
             fixed_particle_list.push_back(true);
             positions.push_back(root_pos);
@@ -145,33 +146,54 @@ class HairNode : public SceneNode {
     //regular sized steps
     for (int i = 0; i < number_steps; i++){
         std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_);
-        for (int i = 0; i < state_.positions.size(); i++) {
+        std::vector<glm::vec3> new_velocities = {};
+        std::vector<glm::vec3> new_positions = {};
+        new_velocities.push_back(glm::vec3(0.f));
+        new_positions.push_back(state_.positions[0]);
+        for (int i = 1; i < state_.positions.size(); i++) {
+            std::cout << i <<std::endl;
             glm::vec3 x = state_.positions[i];
             glm::vec3 v = state_.velocities[i];
             glm::vec3 f = external_forces[i];
             glm::vec3 p = x + step_size_ * v + step_size_ * step_size_ * f;
-            // TODO: project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
-            glm::vec3 d; // TODO: correction vector for the above line
-            state_.velocities[i] = ((p - x) - system_.s_damp_ * d) / float(delta_time);
-            state_.positions[i] = p;
+            // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
+            glm::vec3 from_i1_to_p = glm::normalize(p - state_.positions[i-1]);
+            glm::vec3 p_before = p;
+            p = state_.positions[i-1] + system_.radii_[i] * from_i1_to_p;
+            glm::vec3 d = p - p_before; // correction vector for the above line
+
+            // TODO: Getting segfaults in both of these lines
+            new_velocities.push_back(((p - x) + system_.s_damp_ * d) / float(step_size_));
+            new_positions.push_back(p);
         }
+        // state_.velocities = new_velocities;
+        // state_.positions = new_positions;
       current_time_ += step_size_;
     }
     //last remaining step
 
     std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_);
-    for (int i = 0; i < state_.positions.size(); i++) {
+    std::vector<glm::vec3> new_velocities = {};
+    std::vector<glm::vec3> new_positions = {};
+    new_velocities.push_back(glm::vec3(0.f));
+    new_positions.push_back(state_.positions[0]);
+    for (int i = 1; i < state_.positions.size(); i++) {
         glm::vec3 x = state_.positions[i];
         glm::vec3 v = state_.velocities[i];
         glm::vec3 f = external_forces[i];
-        glm::vec3 p = x + step_size_ * v + step_size_ * step_size_ * f;
-        // TODO: project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
-        glm::vec3 d; // TODO: correction vector for the above line
-        state_.velocities[i] = ((p - x) - system_.s_damp_ * d) / float(delta_time);
-        state_.positions[i] = p;
+        glm::vec3 p = x + remaining_step * v + remaining_step * remaining_step * f;
+        // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
+        glm::vec3 from_i1_to_p = glm::normalize(p - state_.positions[i - 1]);
+        glm::vec3 p_before = p;
+        p = state_.positions[i - 1] + system_.radii_[i] * from_i1_to_p;
+        glm::vec3 d = p - p_before;
+        new_velocities.push_back(((p - x) - system_.s_damp_ * d) / float(remaining_step));
+        new_positions.push_back(p);
     }
+    state_.velocities = new_velocities;
+    state_.positions = new_positions;
     current_time_ += remaining_step;
-    
+
     // REDRAW SPHERES
     auto positions_ptr = make_unique<PositionArray>();
     for (int i = 0; i < sphere_node_ptrs_.size(); i++){

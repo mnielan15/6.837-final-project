@@ -16,6 +16,7 @@
 #include "gloo/Lab3SceneNode.hpp"
 #include "gloo/Lab3Part2SceneNode.hpp"
 #include "gloo/Lab3Part3SceneNode.hpp"
+#include "gloo/HairNode.hpp"
 
 
 
@@ -65,20 +66,21 @@ void SimulationApp::SetupScene() {
   //auto spiral_node = make_unique<Lab3SceneNode>(integration_step_, integrator_type_);
   //root.AddChild(std::move(spiral_node));
 
-  auto pendulum_node = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
-  pendulum_node->shift();
-  root.AddChild(std::move(pendulum_node));
+  // auto pendulum_node = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
+  // pendulum_node->shift();
+  // root.AddChild(std::move(pendulum_node));
 
-  auto pendulum_node2 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
-  root.AddChild(std::move(pendulum_node2));
+  // auto pendulum_node2 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
+  // root.AddChild(std::move(pendulum_node2));
 
-  auto pendulum_node3 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
-  root.AddChild(std::move(pendulum_node3));
+  // auto pendulum_node3 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
+  // root.AddChild(std::move(pendulum_node3));
 
+  auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, glm::vec3(0.f), 1.f);
+  root.AddChild(std::move(hair_node));
 
-
-  //auto cloth_node = make_unique<Lab3Part3SceneNode>(integration_step_, integrator_type_);
-  //root.AddChild(std::move(cloth_node));
+  // auto cloth_node = make_unique<Lab3Part3SceneNode>(integration_step_, integrator_type_);
+  // root.AddChild(std::move(cloth_node));
 
 
 }
