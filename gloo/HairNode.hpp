@@ -23,6 +23,7 @@
 #include "gloo/shaders/SimpleShader.hpp"
 #include "gloo/shaders/PhongShader.hpp"
 #include "gloo/InputManager.hpp"
+#include "external/src/glm-0.9.9.8/glm/gtx/string_cast.hpp"
 
 
 
@@ -40,7 +41,7 @@ class HairNode : public SceneNode {
     std::vector<glm::vec3> velocities = {};
     std::vector<float> masses = {};
     std::vector<bool> fixed_particle_list = {};
-    std::vector<float> radii = {};
+    radii_ = length_ / num_joints_;
     auto indices = make_unique<IndexArray>();
 
     // https://www.cs.columbia.edu/cg/pdfs/143-rods.pdf for more on discrete Kirchoff rods (section 4.2)
@@ -48,13 +49,13 @@ class HairNode : public SceneNode {
     for (int i = 0; i < num_joints_; i++){
         velocities.push_back(glm::vec3(0.0f));
         masses.push_back(1.0f);
-        radii.push_back(length / num_joints_);
         if (i == 0) {
             fixed_particle_list.push_back(true);
             positions.push_back(root_pos);
         }
         else{
             fixed_particle_list.push_back(false);
+            // glm::vec3 randomness = ; // add some randomness to the starting positions?
             positions.push_back(root_pos + glm::vec3(length / num_joints_ * i));
         }
     }
@@ -91,7 +92,7 @@ class HairNode : public SceneNode {
     step_size_ = step_size;
     integrator_ = IntegratorFactory::CreateIntegrator<FTLSystem, ParticleState>(integrator_type); 
     current_time_ = 0;
-    sphere_mesh_ = PrimitiveFactory::CreateSphere(0.1f, 25, 25);
+    sphere_mesh_ = PrimitiveFactory::CreateSphere(0.01f, 25, 25);
     shader_ = std::make_shared<SimpleShader>();
     sphere_node_ptrs_ = {};
 
@@ -151,23 +152,24 @@ class HairNode : public SceneNode {
         new_velocities.push_back(glm::vec3(0.f));
         new_positions.push_back(state_.positions[0]);
         for (int i = 1; i < state_.positions.size(); i++) {
-            std::cout << i <<std::endl;
+            // printf("%d\n", i);
             glm::vec3 x = state_.positions[i];
             glm::vec3 v = state_.velocities[i];
             glm::vec3 f = external_forces[i];
             glm::vec3 p = x + step_size_ * v + step_size_ * step_size_ * f;
+            glm::vec3 prev_node = state_.positions[i - 1];
             // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
-            glm::vec3 from_i1_to_p = glm::normalize(p - state_.positions[i-1]);
-            glm::vec3 p_before = p;
-            p = state_.positions[i-1] + system_.radii_[i] * from_i1_to_p;
-            glm::vec3 d = p - p_before; // correction vector for the above line
+            glm::vec3 from_i1_to_p = glm::normalize(p - prev_node);
+            glm::vec3 projected_p = prev_node + radii_ * from_i1_to_p;
+            glm::vec3 d = projected_p - p; // correction vector for the above line
 
             // TODO: Getting segfaults in both of these lines
-            new_velocities.push_back(((p - x) + system_.s_damp_ * d) / float(step_size_));
-            new_positions.push_back(p);
+            glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(step_size_);
+            new_velocities.push_back(new_v);
+            new_positions.push_back(projected_p);
         }
-        // state_.velocities = new_velocities;
-        // state_.positions = new_positions;
+        state_.velocities = new_velocities;
+        state_.positions = new_positions;
       current_time_ += step_size_;
     }
     //last remaining step
@@ -182,13 +184,16 @@ class HairNode : public SceneNode {
         glm::vec3 v = state_.velocities[i];
         glm::vec3 f = external_forces[i];
         glm::vec3 p = x + remaining_step * v + remaining_step * remaining_step * f;
+        glm::vec3 prev_node = state_.positions[i - 1];
+
         // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
-        glm::vec3 from_i1_to_p = glm::normalize(p - state_.positions[i - 1]);
-        glm::vec3 p_before = p;
-        p = state_.positions[i - 1] + system_.radii_[i] * from_i1_to_p;
-        glm::vec3 d = p - p_before;
-        new_velocities.push_back(((p - x) - system_.s_damp_ * d) / float(remaining_step));
-        new_positions.push_back(p);
+        glm::vec3 from_i1_to_p = glm::normalize(p - prev_node);
+        glm::vec3 projected_p = prev_node + radii_ * from_i1_to_p;
+        glm::vec3 d = projected_p - p; // correction vector for the above line
+        glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(remaining_step);
+
+        new_velocities.push_back(new_v);
+        new_positions.push_back(projected_p);
     }
     state_.velocities = new_velocities;
     state_.positions = new_positions;
@@ -204,7 +209,8 @@ class HairNode : public SceneNode {
 }
 
  private:
-     int num_joints_ = 10; // for discretization of Kirchhoff rod
+     int num_joints_ = 100; // for discretization of Kirchhoff rod
+     float radii_;
      glm::vec3 root_pos_;
      float length_;
 
