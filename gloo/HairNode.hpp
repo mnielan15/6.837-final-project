@@ -44,8 +44,6 @@ class HairNode : public SceneNode {
     radii_ = length_ / num_joints_;
     auto indices = make_unique<IndexArray>();
 
-    // https://www.cs.columbia.edu/cg/pdfs/143-rods.pdf for more on discrete Kirchoff rods (section 4.2)
-    // See section 5.2 for 'discrete representation' of Kirchhoff rods (which are what we are using as our hair model)
     for (int i = 0; i < num_joints_; i++){
         velocities.push_back(glm::vec3(0.0f));
         masses.push_back(1.0f);
@@ -55,8 +53,8 @@ class HairNode : public SceneNode {
         }
         else{
             fixed_particle_list.push_back(false);
-            // glm::vec3 randomness = ; // add some randomness to the starting positions?
-            positions.push_back(root_pos + glm::vec3(length / num_joints_ * i));
+            // glm::vec3 randomness = glm::vec3(float(rand() % 100) / 1000.f, float(rand() % 100) / 1000.f, float(rand() % 100)/1000.f); // add some randomness to the starting positions?
+            positions.push_back(root_pos + glm::vec3(radii_ * i / glm::sqrt(3.f)));
         }
     }
 
@@ -66,7 +64,18 @@ class HairNode : public SceneNode {
     system_.FixParticle(fixed_particle_list);
 
 
-    //DRAW SPRINGS
+    //DRAW LINE SEGMENTS
+    // first, set indices for the line segments
+    int i = 0;
+    while (i < num_joints_) {
+        indices->push_back(i);
+        if (i != 0 && i != num_joints_ - 1) {
+            indices->push_back(i);
+        }
+        i++;
+    }
+
+    // then create the polyline
     curve_polyline_ = std::make_shared<VertexObject>();
     auto positions_ptr = make_unique<PositionArray>();
     for (glm::vec3 pos : positions){
@@ -80,8 +89,14 @@ class HairNode : public SceneNode {
     line_node->CreateComponent<ShadingComponent>(polyline_shader_);
     auto& rc = line_node->CreateComponent<RenderingComponent>(curve_polyline_);
     rc.SetDrawMode(DrawMode::Lines);
-    //rc.SetDrawRange(0, (N_SUBDIV_ - 2)*2+2);
-    glm::vec3 color(1.f, 1.f, 1.f);
+    // rc.SetDrawRange(0, (N_SUBDIV_ - 2)*2+2);
+
+    // Some brown hair colors (from dark to light):
+    //      0x23120B = (35, 18, 11) -> (0.136, 0.07, 0.043)
+    //      0x3D2314 = (61, 35, 20) -> (0.238, 0.136, 0.078)
+    //      0x5A3825 = (90, 56, 37) -> (0.352, 0.219, 0.145)
+    //      0xCC9966 = (204, 153, 102) -> (0.797, 0.598, 0.398)
+    glm::vec3 color(0.238, 0.136, 0.078);
     auto material = std::make_shared<Material>(color, color, color, 0);
     line_node->CreateComponent<MaterialComponent>(material);
     AddChild(std::move(line_node));
@@ -97,13 +112,27 @@ class HairNode : public SceneNode {
     sphere_node_ptrs_ = {};
 
     //DRAW SPHERES
-    for (int i =0; i < num_joints_; i++){
-        auto sphere_node = make_unique<SceneNode>();
-        sphere_node->CreateComponent<ShadingComponent>(shader_);
-        sphere_node->CreateComponent<RenderingComponent>(sphere_mesh_);
-        sphere_node_ptrs_.push_back(sphere_node.get());
-        AddChild(std::move(sphere_node));
-    }
+    // for (int i =0; i < num_joints_; i++){
+    //     auto sphere_node = make_unique<SceneNode>();
+    //     sphere_node->CreateComponent<ShadingComponent>(shader_);
+    //     sphere_node->CreateComponent<RenderingComponent>(sphere_mesh_);
+    //     sphere_node_ptrs_.push_back(sphere_node.get());
+    //     AddChild(std::move(sphere_node));
+    // }
+    
+    // STARTING ENDPOINT
+    auto sphere_node = make_unique<SceneNode>();
+    sphere_node->CreateComponent<ShadingComponent>(shader_);
+    sphere_node->CreateComponent<RenderingComponent>(sphere_mesh_);
+    sphere_node.get()->GetTransform().SetPosition(glm::vec3(length / glm::sqrt(3.f)));
+    AddChild(std::move(sphere_node));
+
+    // REST ENDPOINT
+    auto sphere_node2 = make_unique<SceneNode>();
+    sphere_node2->CreateComponent<ShadingComponent>(shader_);
+    sphere_node2->CreateComponent<RenderingComponent>(sphere_mesh_);
+    sphere_node2.get()->GetTransform().SetPosition(glm::vec3(0.f, -1.f * length, 0.f));
+    AddChild(std::move(sphere_node2));
   }
 
   virtual void Update(double delta_time) {
@@ -149,25 +178,42 @@ class HairNode : public SceneNode {
         std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_);
         std::vector<glm::vec3> new_velocities = {};
         std::vector<glm::vec3> new_positions = {};
+        std::vector<glm::vec3> d_i = {};
         new_velocities.push_back(glm::vec3(0.f));
         new_positions.push_back(state_.positions[0]);
+        d_i.push_back(glm::vec3(0.f));
+        
         for (int i = 1; i < state_.positions.size(); i++) {
-            // printf("%d\n", i);
             glm::vec3 x = state_.positions[i];
             glm::vec3 v = state_.velocities[i];
             glm::vec3 f = external_forces[i];
             glm::vec3 p = x + step_size_ * v + step_size_ * step_size_ * f;
-            glm::vec3 prev_node = state_.positions[i - 1];
+            glm::vec3 prev_node = new_positions[i - 1];
+            // glm::vec3 prev_node = state_.positions[i - 1];
             // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
             glm::vec3 from_i1_to_p = glm::normalize(p - prev_node);
             glm::vec3 projected_p = prev_node + radii_ * from_i1_to_p;
-            glm::vec3 d = projected_p - p; // correction vector for the above line
 
-            // TODO: Getting segfaults in both of these lines
-            glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(step_size_);
-            new_velocities.push_back(new_v);
+            // store the d_i's and then use d_{i+1} in the new_v calculation instead
+            glm::vec3 d = projected_p - p; // correction vector for the above line
+            d_i.push_back(d);
+            // Dynamic FTL:
+            // glm::vec3 new_v = (projected_p - x) / float(step_size_);
+            // new_velocities.push_back(new_v);
             new_positions.push_back(projected_p);
         }
+
+        // Velocity correction:
+        for (int i = 1; i < state_.positions.size(); i++) {
+            glm::vec3 d_i1 = glm::vec3(0.f);
+            glm::vec3 d_i = new_positions[i];
+            if (i < state_.positions.size() - 1) {
+                d_i1 += d_i1[i + 1];
+            }
+            glm::vec3 new_v = (d_i - system_.s_damp_ * d_i1) / float(step_size_);
+            new_velocities.push_back(new_v);
+        }
+
         state_.velocities = new_velocities;
         state_.positions = new_positions;
       current_time_ += step_size_;
@@ -177,23 +223,36 @@ class HairNode : public SceneNode {
     std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_);
     std::vector<glm::vec3> new_velocities = {};
     std::vector<glm::vec3> new_positions = {};
+    std::vector<glm::vec3> d_i = {};
     new_velocities.push_back(glm::vec3(0.f));
     new_positions.push_back(state_.positions[0]);
+    d_i.push_back(glm::vec3(0.f));
     for (int i = 1; i < state_.positions.size(); i++) {
         glm::vec3 x = state_.positions[i];
         glm::vec3 v = state_.velocities[i];
         glm::vec3 f = external_forces[i];
         glm::vec3 p = x + remaining_step * v + remaining_step * remaining_step * f;
-        glm::vec3 prev_node = state_.positions[i - 1];
+        // glm::vec3 prev_node = state_.positions[i - 1];
+        glm::vec3 prev_node = new_positions[i - 1];
 
         // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
         glm::vec3 from_i1_to_p = glm::normalize(p - prev_node);
         glm::vec3 projected_p = prev_node + radii_ * from_i1_to_p;
         glm::vec3 d = projected_p - p; // correction vector for the above line
-        glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(remaining_step);
+        d_i.push_back(d);
+        // glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(remaining_step);
 
-        new_velocities.push_back(new_v);
+        // new_velocities.push_back(new_v);
         new_positions.push_back(projected_p);
+    }
+    for (int i = 1; i < state_.positions.size(); i++) {
+        glm::vec3 d_i1 = glm::vec3(0.f);
+        glm::vec3 d_i = new_positions[i];
+        if (i < state_.positions.size() - 1) {
+            d_i1 += d_i1[i + 1];
+        }
+        glm::vec3 new_v = (d_i - system_.s_damp_ * d_i1) / float(remaining_step);
+        new_velocities.push_back(new_v);
     }
     state_.velocities = new_velocities;
     state_.positions = new_positions;
@@ -201,15 +260,18 @@ class HairNode : public SceneNode {
 
     // REDRAW SPHERES
     auto positions_ptr = make_unique<PositionArray>();
-    for (int i = 0; i < sphere_node_ptrs_.size(); i++){
-        sphere_node_ptrs_[i]->GetTransform().SetPosition(state_.positions[i]);
+    for (int i = 0; i < state_.positions.size(); i++) {
         positions_ptr->push_back(state_.positions[i]);
     }
+    // for (int i = 0; i < sphere_node_ptrs_.size(); i++){
+    //     sphere_node_ptrs_[i]->GetTransform().SetPosition(state_.positions[i]);
+    //     positions_ptr->push_back(state_.positions[i]);
+    // }
     curve_polyline_->UpdatePositions(std::move(positions_ptr));
 }
 
  private:
-     int num_joints_ = 100; // for discretization of Kirchhoff rod
+     int num_joints_ = 100; // for discretization of hair strand
      float radii_;
      glm::vec3 root_pos_;
      float length_;

@@ -45,7 +45,7 @@ virtual ParticleState ComputeTimeDerivative(const ParticleState& state,
             glm::vec3 drag = - drag_ * particle_velocities[i];
 
             int x = rand() % 100 + 1 - 50;
-            glm::vec3 wind = glm::vec3(0.0f, 0.0f, 1.0f) * float(x);
+            glm::vec3 wind = glm::vec3(0.4f, 0.2f, 0.3f) * float(x);
 
             glm::vec3 acceleration;
             if (wind_on_){
@@ -75,8 +75,8 @@ std::vector<glm::vec3> GetExternalForces(const ParticleState& state) {
             glm::vec3 gravity = glm::vec3(0.f,-1.f, 0.f) * masses_[i] * 9.81f;
             glm::vec3 drag = - drag_ * particle_velocities[i];
 
-            int x = rand() % 100 + 1 - 50;
-            glm::vec3 wind = glm::vec3(0.0f, 0.0f, 1.0f) * float(x);
+            int x = (rand() % 100 + 1 - 50);
+            glm::vec3 wind = glm::vec3(0.4f, 0.2f, 0.3f) * float(x);
 
             glm::vec3 force;
             if (wind_on_) {
@@ -89,11 +89,11 @@ std::vector<glm::vec3> GetExternalForces(const ParticleState& state) {
     }
     return external_forces; 
 }
-float s_damp_ = 0.9;
+float s_damp_ = 0.8f;
 std::vector<float> radii_;
 
 private:
-float drag_ = 0.8;
+float drag_ = 0.1;
 std::vector<float> masses_;
 std::vector<bool> fixed_particles_;
 
