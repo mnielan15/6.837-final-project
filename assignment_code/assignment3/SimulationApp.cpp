@@ -91,7 +91,7 @@ void SimulationApp::SetupScene() {
   //   }
   // }
 
-  int N = 100;
+  int N = 1000;
   int n = 0;
   float r = 1;
   float a = 4*M_PI* r*r / float(N);
@@ -102,13 +102,15 @@ void SimulationApp::SetupScene() {
   float M_phi;
   for (int m = 0; m< M_theta; m++){
     float theta = M_PI*(m + 0.5)/M_theta;
+    if (theta < 3*M_PI/4 ){
     M_phi = round(2*M_PI*sin(theta)/d_phi);
     for (n = 0; n < M_phi; n++){
       float phi = 2*M_PI*n/M_phi;
       glm::vec3 point = {r*sin(theta)*cos(phi), r*sin(theta)*sin(phi), r*cos(theta)};
-      auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, point, 1.0f);
+      auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, point, 6.0f);
       root.AddChild(std::move(hair_node));
       n+=1;
+    }
     }
   }
   // auto cloth_node = make_unique<Lab3Part3SceneNode>(integration_step_, integrator_type_);

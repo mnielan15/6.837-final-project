@@ -10,7 +10,8 @@ class FTLSystem : public ParticleSystemBase {
     bool wind_on_ = false;
     std::vector<glm::vec3> collision_forces_ = {};
     FTLSystem() {
-            for(int i = 0; i < 100; i++){
+    //100 is based on num_joints_ param in hair_node
+    for(int i = 0; i < 100; i++){
         collision_forces_.push_back(glm::vec3(0.f));
     }
     }; 

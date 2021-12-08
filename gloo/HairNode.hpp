@@ -212,13 +212,13 @@ class HairNode : public SceneNode {
 
             //Hair - object collision
             if (glm::dot(projected_p, projected_p) < 1.0){
-                glm::vec3 point_on_sphere = glm::normalize(projected_p - glm::vec3(0.f))*1.0f;
+                glm::vec3 point_on_sphere = glm::normalize(projected_p - sphere_center_)*sphere_radius_;
                 float d = glm::distance(point_on_sphere, projected_p);
                 float k = 300.f;
                 //std::cout << glm::to_string(point_on_sphere) << std::endl;
                // std::cout << glm::to_string(projected_p) << std::endl;
 
-                glm::vec3 normal = glm::normalize(projected_p - glm::vec3(0.f));
+                glm::vec3 normal = glm::normalize(projected_p - sphere_center_);
                 glm::vec3 penalty_force = k * d * normal;
                 system_.AddCollisionForce(penalty_force);
             }
@@ -275,13 +275,13 @@ class HairNode : public SceneNode {
 
         new_positions.push_back(projected_p);
                     if (glm::dot(projected_p, projected_p) < 1.0){
-                glm::vec3 point_on_sphere = glm::normalize(projected_p - glm::vec3(0.f))*1.0f;
+                glm::vec3 point_on_sphere = glm::normalize(projected_p - sphere_center_)*sphere_radius_;
                 float d = glm::distance(point_on_sphere, projected_p);
                 float k = 300.f;
                 //std::cout << glm::to_string(point_on_sphere) << std::endl;
                // std::cout << glm::to_string(projected_p) << std::endl;
 
-                glm::vec3 normal = glm::normalize(projected_p - glm::vec3(0.f));
+                glm::vec3 normal = glm::normalize(projected_p - sphere_center_);
                 glm::vec3 penalty_force = k * d * normal;
                 system_.AddCollisionForce(penalty_force);
             }
@@ -320,6 +320,8 @@ class HairNode : public SceneNode {
 
  private:
      int num_joints_ = 100; // for discretization of hair strand
+     glm::vec3 sphere_center_ = {0.f, 0.f, 0.f};
+     float sphere_radius_ = 1.0f;
      float radii_;
      glm::vec3 root_pos_;
      float length_;
