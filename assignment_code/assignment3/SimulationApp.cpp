@@ -107,7 +107,7 @@ void SimulationApp::SetupScene() {
     for (n = 0; n < M_phi; n++){
       float phi = 2*M_PI*n/M_phi;
       glm::vec3 point = {r*sin(theta)*cos(phi), r*sin(theta)*sin(phi), r*cos(theta)};
-      auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, point, 6.0f);
+      auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, point, 1.0f, true);
       root.AddChild(std::move(hair_node));
       n+=1;
     }
