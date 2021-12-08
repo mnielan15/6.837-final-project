@@ -8,13 +8,22 @@ namespace GLOO {
 class FTLSystem : public ParticleSystemBase {
  public:
     bool wind_on_ = false;
-    FTLSystem() {}; 
+    std::vector<glm::vec3> collision_forces_ = {};
+    FTLSystem() {
+            for(int i = 0; i < 100; i++){
+        collision_forces_.push_back(glm::vec3(0.f));
+    }
+    }; 
 virtual ~FTLSystem(){}
 
 void AddMasses(std::vector<float> masses){
     for (float mass: masses) {
         masses_.push_back(mass);
     }
+}
+
+void AddCollisionForce(glm::vec3 force){
+    collision_forces_.push_back(force);
 }
 
 void AddRadii(std::vector<float> radii){
@@ -81,13 +90,14 @@ std::vector<glm::vec3> GetExternalForces(const ParticleState& state, float time)
             glm::vec3 force;
             if (wind_on_) {
                 glm::vec3 wind = WindForce(time);
-                force = (gravity  + drag + wind);
+                force = (gravity  + drag + wind + collision_forces_[i]);
             } else {
-                force = (gravity  + drag);
+                force = (gravity  + drag + collision_forces_[i]);
             }
             external_forces.push_back(force);
         }
     }
+    collision_forces_ = {};
     return external_forces; 
 }
 float s_damp_ = 0.9f;

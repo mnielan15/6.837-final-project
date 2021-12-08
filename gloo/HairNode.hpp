@@ -25,6 +25,7 @@
 #include "gloo/InputManager.hpp"
 #include "external/src/glm-0.9.9.8/glm/gtx/string_cast.hpp"
 #include "external/src/glm-0.9.9.8/glm/gtx/perpendicular.hpp"
+#include  "glm/gtx/string_cast.hpp"
 
 
 
@@ -144,18 +145,18 @@ class HairNode : public SceneNode {
     // }
 
     // STARTING ENDPOINT
-    auto sphere_node = make_unique<SceneNode>();
-    sphere_node->CreateComponent<ShadingComponent>(shader_);
-    sphere_node->CreateComponent<RenderingComponent>(sphere_mesh_);
-    sphere_node.get()->GetTransform().SetPosition(root_pos + glm::vec3(length / glm::sqrt(3.f)));
-    AddChild(std::move(sphere_node));
+    // auto sphere_node = make_unique<SceneNode>();
+    // sphere_node->CreateComponent<ShadingComponent>(shader_);
+    // sphere_node->CreateComponent<RenderingComponent>(sphere_mesh_);
+    // sphere_node.get()->GetTransform().SetPosition(root_pos + glm::vec3(length / glm::sqrt(3.f)));
+    // AddChild(std::move(sphere_node));
 
-    // REST ENDPOINT
-    auto sphere_node2 = make_unique<SceneNode>();
-    sphere_node2->CreateComponent<ShadingComponent>(shader_);
-    sphere_node2->CreateComponent<RenderingComponent>(sphere_mesh_);
-    sphere_node2.get()->GetTransform().SetPosition(root_pos + glm::vec3(0.f, -1.f * length, 0.f));
-    AddChild(std::move(sphere_node2));
+    // // REST ENDPOINT
+    // auto sphere_node2 = make_unique<SceneNode>();
+    // sphere_node2->CreateComponent<ShadingComponent>(shader_);
+    // sphere_node2->CreateComponent<RenderingComponent>(sphere_mesh_);
+    // sphere_node2.get()->GetTransform().SetPosition(root_pos + glm::vec3(0.f, -1.f * length, 0.f));
+    // AddChild(std::move(sphere_node2));
   }
 
   virtual void Update(double delta_time) {
@@ -232,6 +233,23 @@ class HairNode : public SceneNode {
             // new_velocities.push_back(new_v);
 
             new_positions.push_back(projected_p);
+
+            //Hair - object collision
+            if (glm::dot(projected_p, projected_p) < 1.0){
+                glm::vec3 point_on_sphere = glm::normalize(projected_p - glm::vec3(0.f))*1.0f;
+                float d = glm::distance(point_on_sphere, projected_p);
+                float k = 300.f;
+                //std::cout << glm::to_string(point_on_sphere) << std::endl;
+               // std::cout << glm::to_string(projected_p) << std::endl;
+
+                glm::vec3 normal = glm::normalize(projected_p - glm::vec3(0.f));
+                glm::vec3 penalty_force = k * d * normal;
+                system_.AddCollisionForce(penalty_force);
+            }
+            else{
+                system_.AddCollisionForce(glm::vec3(0.f));
+
+            }
         }
 
         // Velocity correction:
@@ -280,6 +298,21 @@ class HairNode : public SceneNode {
         // new_velocities.push_back(new_v);
 
         new_positions.push_back(projected_p);
+                    if (glm::dot(projected_p, projected_p) < 1.0){
+                glm::vec3 point_on_sphere = glm::normalize(projected_p - glm::vec3(0.f))*1.0f;
+                float d = glm::distance(point_on_sphere, projected_p);
+                float k = 300.f;
+                //std::cout << glm::to_string(point_on_sphere) << std::endl;
+               // std::cout << glm::to_string(projected_p) << std::endl;
+
+                glm::vec3 normal = glm::normalize(projected_p - glm::vec3(0.f));
+                glm::vec3 penalty_force = k * d * normal;
+                system_.AddCollisionForce(penalty_force);
+            }
+            else{
+                system_.AddCollisionForce(glm::vec3(0.f));
+
+            }
     }
 
     // Velocity correction:
@@ -314,7 +347,7 @@ class HairNode : public SceneNode {
     bool is_curly_;
     float curl_freq_ = 0.5f;        // period of a curl of hair
     int normal_samples_ = 10;   // number of subdivisions between joints for making curly hair
-    float curl_radius_ = 0.05f;
+    float curl_radius_ = 0.025f;
     float radii_;
     glm::vec3 root_pos_;
     glm::vec3 root_normal_;
