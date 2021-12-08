@@ -24,6 +24,7 @@
 #include "gloo/shaders/PhongShader.hpp"
 #include "gloo/InputManager.hpp"
 #include "external/src/glm-0.9.9.8/glm/gtx/string_cast.hpp"
+#include "external/src/glm-0.9.9.8/glm/gtx/perpendicular.hpp"
 
 
 
@@ -33,10 +34,12 @@
 namespace GLOO {
 class HairNode : public SceneNode {
  public:
-  HairNode(float step_size, IntegratorType integrator_type, glm::vec3 root_pos, float length){
+  HairNode(float step_size, IntegratorType integrator_type, glm::vec3 root_pos, float length, bool is_curly){
     //initialize position, velocity, mass, and fixed particles
     length_ = length;
     root_pos_ = root_pos;
+    is_curly_ = is_curly;
+    root_normal_ = glm::vec3(1.0f, 0.f, 0.f); // TODO: make this a field for the constructor
     std::vector<glm::vec3> positions = {};
     std::vector<glm::vec3> velocities = {};
     std::vector<float> masses = {};
@@ -53,7 +56,6 @@ class HairNode : public SceneNode {
         }
         else{
             fixed_particle_list.push_back(false);
-            // glm::vec3 randomness = glm::vec3(float(rand() % 100) / 1000.f, float(rand() % 100) / 1000.f, float(rand() % 100)/1000.f); // add some randomness to the starting positions?
             positions.push_back(root_pos + glm::vec3(radii_ * i / glm::sqrt(3.f)));
         }
     }
@@ -66,13 +68,29 @@ class HairNode : public SceneNode {
 
     //DRAW LINE SEGMENTS
     // first, set indices for the line segments
-    int i = 0;
-    while (i < num_joints_) {
-        indices->push_back(i);
-        if (i != 0 && i != num_joints_ - 1) {
-            indices->push_back(i);
+    if (is_curly_) {
+        int t = 0;
+        for (int i = 0; i < positions.size(); i++) {
+            indices->push_back(t);
+            if (i != 0 && i < positions.size() - 1) {
+                indices->push_back(t);
+            }
+            t++;
+            if (i < positions.size() - 1) {
+                for (int j = 1; j < normal_samples_; j++) {
+                    indices->push_back(t);
+                    indices->push_back(t);
+                    t++;
+                }
+            }
         }
-        i++;
+    } else {
+        for (int i = 0; i < positions.size(); i++) {
+            indices->push_back(i);
+            if (i != 0 && i < positions.size() - 1) {
+                indices->push_back(i);
+            }
+        }
     }
 
     // then create the polyline
@@ -81,7 +99,12 @@ class HairNode : public SceneNode {
     for (glm::vec3 pos : positions){
         positions_ptr->push_back(pos);
     }
-    curve_polyline_->UpdatePositions(std::move(positions_ptr));
+
+    if (is_curly_) {
+        UpdateCurlPositions();
+    } else {
+        curve_polyline_->UpdatePositions(std::move(positions_ptr));
+    }
     curve_polyline_->UpdateIndices(std::move(indices));
     polyline_shader_ = std::make_shared<SimpleShader>();
     auto line_node = make_unique<SceneNode>();
@@ -111,7 +134,7 @@ class HairNode : public SceneNode {
     shader_ = std::make_shared<SimpleShader>();
     sphere_node_ptrs_ = {};
 
-    //DRAW SPHERES
+    //DRAW JOINTS
     // for (int i =0; i < num_joints_; i++){
     //     auto sphere_node = make_unique<SceneNode>();
     //     sphere_node->CreateComponent<ShadingComponent>(shader_);
@@ -140,7 +163,7 @@ class HairNode : public SceneNode {
     //RESET DYNAMICS BY PRESSING R
     if (InputManager::GetInstance().IsKeyPressed('R')) {
         if (prev_released_) {
-            std::cout << "test" << std::endl;
+            std::cout << "reset positions" << std::endl;
             std::vector<glm::vec3> positions = {};
             std::vector<glm::vec3> velocities = {};
             for (int i = 0; i < num_joints_; i++) {
@@ -162,9 +185,10 @@ class HairNode : public SceneNode {
     if (InputManager::GetInstance().IsKeyPressed('W')){
         if (prev_released_2_){
             system_.wind_on_ = ! system_.wind_on_;
+            std::cout << "wind toggled ";
             std::cout << system_.wind_on_ << std::endl;
         }
-         prev_released_2_ = false;
+        prev_released_2_ = false;
     }  
     else {
         prev_released_2_ = true;
@@ -223,7 +247,7 @@ class HairNode : public SceneNode {
 
         state_.velocities = new_velocities;
         state_.positions = new_positions;
-      current_time_ += step_size_;
+        current_time_ += step_size_;
     }
 
     // last remaining step
@@ -274,35 +298,123 @@ class HairNode : public SceneNode {
     current_time_ += remaining_step;
 
     // REDRAW LINES
-    auto positions_ptr = make_unique<PositionArray>();
-    for (int i = 0; i < state_.positions.size(); i++) {
-        positions_ptr->push_back(state_.positions[i]);
+    if (is_curly_) {
+        UpdateCurlPositions();
+    } else {
+        auto positions_ptr = make_unique<PositionArray>();
+        for (int i = 0; i < state_.positions.size(); i++) {
+            positions_ptr->push_back(state_.positions[i]);
+        }
+        curve_polyline_->UpdatePositions(std::move(positions_ptr));
     }
-    // for (int i = 0; i < sphere_node_ptrs_.size(); i++){
-    //     sphere_node_ptrs_[i]->GetTransform().SetPosition(state_.positions[i]);
-    //     positions_ptr->push_back(state_.positions[i]);
-    // }
-    curve_polyline_->UpdatePositions(std::move(positions_ptr));
 }
 
  private:
-     int num_joints_ = 100; // for discretization of hair strand
-     float radii_;
-     glm::vec3 root_pos_;
-     float length_;
+    int num_joints_ = 100;      // for discretization of hair strand
+    bool is_curly_;
+    float curl_freq_ = 0.5f;        // period of a curl of hair
+    int normal_samples_ = 10;   // number of subdivisions between joints for making curly hair
+    float curl_radius_ = 0.05f;
+    float radii_;
+    glm::vec3 root_pos_;
+    glm::vec3 root_normal_;
+    float length_;
 
-     std::unique_ptr<IntegratorBase<FTLSystem, ParticleState> > integrator_;
-     ParticleState state_;
-     FTLSystem system_;
-     float step_size_;
-     float current_time_;
-     std::shared_ptr<VertexObject> sphere_mesh_;
-     std::shared_ptr<ShaderProgram> shader_;
-     std::vector<SceneNode *> sphere_node_ptrs_;
-     std::shared_ptr<VertexObject> curve_polyline_;
-     std::shared_ptr<ShaderProgram> polyline_shader_;
-     bool prev_released_;
-     bool prev_released_2_;
+    std::unique_ptr<IntegratorBase<FTLSystem, ParticleState> > integrator_;
+    ParticleState state_;
+    FTLSystem system_;
+    float step_size_;
+    float current_time_;
+    std::shared_ptr<VertexObject> sphere_mesh_;
+    std::shared_ptr<ShaderProgram> shader_;
+    std::vector<SceneNode *> sphere_node_ptrs_;
+    std::shared_ptr<VertexObject> curve_polyline_;
+    std::shared_ptr<ShaderProgram> polyline_shader_;
+    bool prev_released_;
+    bool prev_released_2_;
+
+    std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>> GetNormals(std::vector<glm::vec3> positions, glm::vec3 root_normal)
+    {
+        // Returns a pair where the first element is a vector of all of the normals and the second is all the binormals
+        // for use in rendering curly hair
+
+        std::vector<glm::vec3> joint_normals = {};
+        std::vector<glm::vec3> joint_binormals = {};
+        std::vector<glm::vec3> all_normals = {}; // joint_normals plus the subdivisions' normals
+        std::vector<glm::vec3> all_binormals = {}; // joint_binormals plus the subdivisions' binormals
+
+        // Calculate normals and binormals for the joints
+        joint_normals.push_back(root_normal);
+        joint_binormals.push_back(glm::normalize(glm::cross(root_normal, positions[1]-positions[0])));
+        for (int i = 1; i < positions.size(); i++) {
+            glm::vec3 prev_norm = joint_normals[i - 1];
+            glm::vec3 first_perp_norm = glm::perp(prev_norm, positions[i] - positions[i - 1]);
+            glm::vec3 this_norm = glm::vec3(0.f);
+            glm::vec3 this_binorm = glm::vec3(0.f);
+            if (i < positions.size() - 1) {
+                glm::vec3 second_perp_norm = glm::perp(prev_norm, positions[i + 1] - positions[i]);
+                this_norm += glm::normalize((first_perp_norm + second_perp_norm) / 2.f);
+                this_binorm += glm::normalize(glm::cross(this_norm, positions[i + 1] - positions[i]));
+            } else {
+                this_norm += glm::normalize(first_perp_norm);
+                this_binorm += glm::normalize(glm::cross(this_norm, positions[i] - positions[i - 1]));
+            }
+            joint_normals.push_back(this_norm);
+            joint_binormals.push_back(this_binorm);
+        }
+
+        // Now interpolate for the subdivisions
+        for (int i = 0; i < num_joints_; i++) {
+            // first add the joint normals and binormals
+            all_normals.push_back(joint_normals[i]);
+            all_binormals.push_back(joint_binormals[i]);
+            glm::vec3 hair_dir = glm::vec3(0.f);
+            if (i == num_joints_ - 1) {
+                hair_dir += positions[i] - positions[i - 1];
+            } else {
+                hair_dir += positions[i + 1] - positions[i];
+            }
+
+            // now interpolate for normal_samples_ # of times
+            if (i < num_joints_ - 1) {
+                for (int j = 1; j < normal_samples_; j++) {
+                    float weight1 = normal_samples_ - j;
+                    float weight2 = j;
+                    glm::vec3 interpolated_norm = glm::normalize(weight1 * joint_normals[i] + weight2 * joint_normals[i + 1]);
+                    all_normals.push_back(interpolated_norm);
+                    all_binormals.push_back(glm::normalize(glm::cross(interpolated_norm, hair_dir)));
+                }
+            }
+        }
+        return std::pair<std::vector<glm::vec3>, std::vector<glm::vec3>>(all_normals, all_binormals);
+    }
+
+    void UpdateCurlPositions() {
+        auto normals_pair = GetNormals(state_.positions, root_normal_);
+        std::vector<glm::vec3> normals = normals_pair.first;
+        std::vector<glm::vec3> binormals = normals_pair.second;
+        auto curl_positions = make_unique<PositionArray>();
+
+        int t = 0;
+        for (int i = 0; i < state_.positions.size(); i ++) {
+
+            glm::vec3 pos = state_.positions[i] + float(cos(curl_freq_ * t)) * normals[i] * curl_radius_ + float(sin(curl_freq_ * t)) * binormals[i] * curl_radius_;
+            curl_positions->push_back(pos);
+            t++;
+
+            if (i < state_.positions.size() - 1) {
+                for (int j = 1; j < normal_samples_; j++) {
+
+                    glm::vec3 dir = state_.positions[i + 1] - state_.positions[i];
+                    glm::vec3 pos = state_.positions[i] + dir * float(j) / float(normal_samples_) + float(cos(curl_freq_ * t)) * normals[i] * curl_radius_ + float(sin(curl_freq_ * t)) * binormals[i] * curl_radius_;
+                    curl_positions->push_back(pos);
+                    t++;
+
+                }
+            }
+        }
+        curve_polyline_->UpdatePositions(std::move(curl_positions));
+    }
 
 };  // namespace GLOO
 }
