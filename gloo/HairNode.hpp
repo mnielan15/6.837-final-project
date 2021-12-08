@@ -119,19 +119,19 @@ class HairNode : public SceneNode {
     //     sphere_node_ptrs_.push_back(sphere_node.get());
     //     AddChild(std::move(sphere_node));
     // }
-    
+
     // STARTING ENDPOINT
     auto sphere_node = make_unique<SceneNode>();
     sphere_node->CreateComponent<ShadingComponent>(shader_);
     sphere_node->CreateComponent<RenderingComponent>(sphere_mesh_);
-    sphere_node.get()->GetTransform().SetPosition(glm::vec3(length / glm::sqrt(3.f)));
+    sphere_node.get()->GetTransform().SetPosition(root_pos + glm::vec3(length / glm::sqrt(3.f)));
     AddChild(std::move(sphere_node));
 
     // REST ENDPOINT
     auto sphere_node2 = make_unique<SceneNode>();
     sphere_node2->CreateComponent<ShadingComponent>(shader_);
     sphere_node2->CreateComponent<RenderingComponent>(sphere_mesh_);
-    sphere_node2.get()->GetTransform().SetPosition(glm::vec3(0.f, -1.f * length, 0.f));
+    sphere_node2.get()->GetTransform().SetPosition(root_pos + glm::vec3(0.f, -1.f * length, 0.f));
     AddChild(std::move(sphere_node2));
   }
 
@@ -148,7 +148,7 @@ class HairNode : public SceneNode {
                 if (i == 0) {
                     positions.push_back(state_.positions[0]);
                 } else {
-                    positions.push_back(state_.positions[0] + glm::vec3(length_ / num_joints_ * i));
+                    positions.push_back(state_.positions[0] + glm::vec3(radii_ * i / glm::sqrt(3.f)));
                 }
             }
             state_ = ParticleState{positions, velocities};
@@ -173,15 +173,18 @@ class HairNode : public SceneNode {
     //INTEGRATE
     int number_steps = int(delta_time/step_size_);
     float remaining_step = delta_time - number_steps*step_size_;
+
     //regular sized steps
     for (int i = 0; i < number_steps; i++){
-        std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_);
+        std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_, current_time_);
         std::vector<glm::vec3> new_velocities = {};
         std::vector<glm::vec3> new_positions = {};
-        std::vector<glm::vec3> d_i = {};
+        std::vector<glm::vec3> d_is = {};
+        std::vector<glm::vec3> p_x = {};
+        p_x.push_back(glm::vec3(0.f));
         new_velocities.push_back(glm::vec3(0.f));
         new_positions.push_back(state_.positions[0]);
-        d_i.push_back(glm::vec3(0.f));
+        d_is.push_back(glm::vec3(0.f));
         
         for (int i = 1; i < state_.positions.size(); i++) {
             glm::vec3 x = state_.positions[i];
@@ -190,25 +193,29 @@ class HairNode : public SceneNode {
             glm::vec3 p = x + step_size_ * v + step_size_ * step_size_ * f;
             glm::vec3 prev_node = new_positions[i - 1];
             // glm::vec3 prev_node = state_.positions[i - 1];
+
             // Project p onto sphere around state_.positions[i-1] with radius system_.radii[i-1]
             glm::vec3 from_i1_to_p = glm::normalize(p - prev_node);
             glm::vec3 projected_p = prev_node + radii_ * from_i1_to_p;
 
             // store the d_i's and then use d_{i+1} in the new_v calculation instead
             glm::vec3 d = projected_p - p; // correction vector for the above line
-            d_i.push_back(d);
+            d_is.push_back(d);
+            p_x.push_back(projected_p - x);
+
             // Dynamic FTL:
             // glm::vec3 new_v = (projected_p - x) / float(step_size_);
             // new_velocities.push_back(new_v);
+
             new_positions.push_back(projected_p);
         }
 
         // Velocity correction:
         for (int i = 1; i < state_.positions.size(); i++) {
             glm::vec3 d_i1 = glm::vec3(0.f);
-            glm::vec3 d_i = new_positions[i];
+            glm::vec3 d_i = p_x[i];
             if (i < state_.positions.size() - 1) {
-                d_i1 += d_i1[i + 1];
+                d_i1 += d_is[i + 1];
             }
             glm::vec3 new_v = (d_i - system_.s_damp_ * d_i1) / float(step_size_);
             new_velocities.push_back(new_v);
@@ -218,15 +225,17 @@ class HairNode : public SceneNode {
         state_.positions = new_positions;
       current_time_ += step_size_;
     }
-    //last remaining step
 
-    std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_);
+    // last remaining step
+    std::vector<glm::vec3> external_forces = system_.GetExternalForces(state_, current_time_);
     std::vector<glm::vec3> new_velocities = {};
     std::vector<glm::vec3> new_positions = {};
-    std::vector<glm::vec3> d_i = {};
+    std::vector<glm::vec3> d_is = {};
+    std::vector<glm::vec3> p_x = {};
+    p_x.push_back(glm::vec3(0.f));
     new_velocities.push_back(glm::vec3(0.f));
     new_positions.push_back(state_.positions[0]);
-    d_i.push_back(glm::vec3(0.f));
+    d_is.push_back(glm::vec3(0.f));
     for (int i = 1; i < state_.positions.size(); i++) {
         glm::vec3 x = state_.positions[i];
         glm::vec3 v = state_.velocities[i];
@@ -239,26 +248,32 @@ class HairNode : public SceneNode {
         glm::vec3 from_i1_to_p = glm::normalize(p - prev_node);
         glm::vec3 projected_p = prev_node + radii_ * from_i1_to_p;
         glm::vec3 d = projected_p - p; // correction vector for the above line
-        d_i.push_back(d);
-        // glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(remaining_step);
+        d_is.push_back(d);
+        p_x.push_back(projected_p - x);
 
+        // Dynamic FTL:
+        // glm::vec3 new_v = ((projected_p - x) - system_.s_damp_ * d) / float(remaining_step);
         // new_velocities.push_back(new_v);
+
         new_positions.push_back(projected_p);
     }
+
+    // Velocity correction:
     for (int i = 1; i < state_.positions.size(); i++) {
         glm::vec3 d_i1 = glm::vec3(0.f);
-        glm::vec3 d_i = new_positions[i];
+        glm::vec3 d_i = p_x[i];
         if (i < state_.positions.size() - 1) {
-            d_i1 += d_i1[i + 1];
+            d_i1 += d_is[i + 1];
         }
         glm::vec3 new_v = (d_i - system_.s_damp_ * d_i1) / float(remaining_step);
         new_velocities.push_back(new_v);
     }
+
     state_.velocities = new_velocities;
     state_.positions = new_positions;
     current_time_ += remaining_step;
 
-    // REDRAW SPHERES
+    // REDRAW LINES
     auto positions_ptr = make_unique<PositionArray>();
     for (int i = 0; i < state_.positions.size(); i++) {
         positions_ptr->push_back(state_.positions[i]);
