@@ -17,6 +17,10 @@
 #include "gloo/Lab3Part2SceneNode.hpp"
 #include "gloo/Lab3Part3SceneNode.hpp"
 #include "gloo/HairNode.hpp"
+#define _USE_MATH_DEFINES
+ 
+#include <cmath>
+#include <iostream>
 
 
 
@@ -76,9 +80,37 @@ void SimulationApp::SetupScene() {
   // auto pendulum_node3 = make_unique<Lab3Part2SceneNode>(integration_step_, integrator_type_);
   // root.AddChild(std::move(pendulum_node3));
 
-  auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, glm::vec3(0.f), 1.5f);
-  root.AddChild(std::move(hair_node));
+  //auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, glm::vec3(1.f), 1.5f);
+  //root.AddChild(std::move(hair_node));
 
+  // for (float i = -1; i <=1; i+= 0.1){
+  //   for (float j = -1; j <= 1; j+= 0.1){
+  //     float z = glm::sqrt(1-i*i + j*j);
+  //     auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, glm::vec3(i, j, z), 1.0f);
+  //     root.AddChild(std::move(hair_node));
+  //   }
+  // }
+
+  int N = 100;
+  int n = 0;
+  float r = 1;
+  float a = 4*M_PI* r*r / float(N);
+  float d = sqrt(a);
+  float M_theta = round(M_PI/d);
+  float d_theta = M_PI / M_theta;
+  float d_phi = a / d_theta;
+  float M_phi;
+  for (int m = 0; m< M_theta; m++){
+    float theta = M_PI*(m + 0.5)/M_theta;
+    M_phi = round(2*M_PI*sin(theta)/d_phi);
+    for (n = 0; n < M_phi; n++){
+      float phi = 2*M_PI*n/M_phi;
+      glm::vec3 point = {r*sin(theta)*cos(phi), r*sin(theta)*sin(phi), r*cos(theta)};
+      auto hair_node = make_unique<HairNode>(integration_step_, integrator_type_, point, 1.0f);
+      root.AddChild(std::move(hair_node));
+      n+=1;
+    }
+  }
   // auto cloth_node = make_unique<Lab3Part3SceneNode>(integration_step_, integrator_type_);
   // root.AddChild(std::move(cloth_node));
 
